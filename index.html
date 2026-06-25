@@ -63,11 +63,9 @@
   .btn-apply:hover{opacity:.85;}
 
   /* PAIR FILTER */
-  .pair-bar{
-    display:flex;align-items:center;gap:8px;padding:7px 16px;
-    background:var(--surface);border-bottom:1px solid var(--border);
-    flex-shrink:0;overflow-x:auto;scrollbar-width:thin;
-  }
+    .pair-bar{
+      display:none;
+    }
   .pair-bar::-webkit-scrollbar{height:3px;}
   .pair-bar::-webkit-scrollbar-track{background:transparent;}
   .pair-bar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
@@ -136,13 +134,7 @@
     <div class="tf-group">
       <label>Timeframe (sec):</label>
       <input id="tf-input" class="tf-input" type="number" value="300" min="10"/>
-      <div class="tf-presets">
-        <div class="preset" data-s="60">1m</div>
-        <div class="preset active" data-s="300">5m</div>
-        <div class="preset" data-s="900">15m</div>
-        <div class="preset" data-s="1800">30m</div>
-        <div class="preset" data-s="3600">1h</div>
-      </div>
+      <div class="tf-presets" style="display:none"></div>
       <button class="btn-apply" id="btn-apply">Apply</button>
     </div>
   </header>
@@ -588,7 +580,7 @@ document.querySelectorAll('.preset').forEach(el=>{
 
 function applyTF(){
   const v=parseInt(document.getElementById('tf-input').value)||300;
-  if(v<10||v>SESSION_RANGE)return;
+  if(v<1||v>SESSION_RANGE)return;
   tfSec=v;
   document.querySelectorAll('.preset').forEach(p=>{
     p.classList.toggle('active',parseInt(p.dataset.s)===v);
