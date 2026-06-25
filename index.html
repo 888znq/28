@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OHLC — 28 Pairs · 10:30–22:30</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --bg:#0d0d0f;
+    --surface:#141417;
+    --border:#1e1e24;
+    --border2:#2a2a33;
+    --text:#e2e2e8;
+    --muted:#6b6b7e;
+    --accent:#4f8ef7;
+    --green:#26c97e;
+    --red:#f04f5a;
+    --font:'Inter',system-ui,sans-serif;
+  }
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  #app{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+
+  /* HEADER */
+  header{
+    display:flex;align-items:center;gap:16px;padding:10px 16px;
+    background:var(--surface);border-bottom:1px solid var(--border);
+    flex-shrink:0;flex-wrap:wrap;
+  }
+  .logo{font-size:14px;font-weight:600;letter-spacing:-.3px;color:#fff;white-space:nowrap;}
+  .logo span{color:var(--accent);}
+  .session-badge{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    background:#1a1a22;border:1px solid var(--border2);
+    padding:3px 10px;border-radius:5px;color:var(--muted);white-space:nowrap;
+  }
+  .session-badge b{color:var(--text);}
+
+  .tf-group{display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap;}
+  .tf-group label{font-size:11px;color:var(--muted);white-space:nowrap;}
+  .tf-input{
+    width:74px;font-family:'JetBrains Mono',monospace;font-size:12px;
+    background:#1a1a22;border:1px solid var(--border2);color:#fff;
+    padding:5px 8px;border-radius:5px;text-align:center;outline:none;
+    transition:border-color .15s;
+  }
+  .tf-input:focus{border-color:var(--accent);}
+  .tf-presets{display:flex;gap:4px;}
+  .preset{
+    font-size:10px;font-family:'JetBrains Mono',monospace;
+    background:#1a1a22;border:1px solid var(--border2);color:var(--muted);
+    padding:4px 8px;border-radius:5px;cursor:pointer;transition:all .12s;white-space:nowrap;
+  }
+  .preset:hover{border-color:var(--accent);color:var(--accent);}
+  .preset.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .btn-apply{
+    font-size:11px;font-weight:500;background:var(--accent);color:#fff;
+    border:none;padding:5px 12px;border-radius:5px;cursor:pointer;
+    transition:opacity .12s;white-space:nowrap;
+  }
+  .btn-apply:hover{opacity:.85;}
+
+  /* PAIR FILTER */
+  .pair-bar{
+    display:flex;align-items:center;gap:8px;padding:7px 16px;
+    background:var(--surface);border-bottom:1px solid var(--border);
+    flex-shrink:0;overflow-x:auto;scrollbar-width:thin;
+  }
+  .pair-bar::-webkit-scrollbar{height:3px;}
+  .pair-bar::-webkit-scrollbar-track{background:transparent;}
+  .pair-bar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+  .pair-tag{
+    font-size:10px;font-family:'JetBrains Mono',monospace;
+    padding:3px 8px;border-radius:4px;cursor:pointer;white-space:nowrap;
+    border:1px solid transparent;transition:all .12s;color:var(--muted);
+    flex-shrink:0;
+  }
+  .pair-tag.on{border-color:currentColor;opacity:1;}
+  .pair-tag.off{opacity:.3;border-color:var(--border2);}
+  .pair-tag:hover{opacity:.9;}
+  .filter-btn{
+    font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;
+    background:transparent;border:1px solid var(--border2);color:var(--muted);
+    white-space:nowrap;flex-shrink:0;transition:all .12s;
+  }
+  .filter-btn:hover{border-color:var(--muted);color:var(--text);}
+
+  /* CHART AREA */
+  #chart-area{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:12px 16px 8px;}
+  #stats{display:flex;gap:16px;margin-bottom:8px;flex-wrap:wrap;}
+  .stat{font-size:11px;color:var(--muted);}
+  .stat b{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);}
+  #canvas-wrap{position:relative;flex:1;min-height:0;}
+  canvas{display:block;width:100%;height:100%;cursor:crosshair;}
+  #tooltip{
+    position:absolute;pointer-events:none;
+    background:#1a1a22;border:1px solid var(--border2);
+    border-radius:7px;padding:8px 10px;font-size:11px;
+    display:none;z-index:20;min-width:130px;
+    font-family:'JetBrains Mono',monospace;
+    box-shadow:0 4px 16px rgba(0,0,0,.5);
+  }
+  #tooltip .tt-pair{font-size:11px;font-weight:600;margin-bottom:4px;letter-spacing:.5px;}
+  #tooltip .tt-row{display:flex;justify-content:space-between;gap:12px;color:var(--muted);line-height:1.7;}
+  #tooltip .tt-row span{color:var(--text);}
+  #crosshair-time{
+    position:absolute;bottom:0;font-size:10px;
+    font-family:'JetBrains Mono',monospace;
+    background:#1a1a22;border:1px solid var(--border2);
+    padding:2px 6px;border-radius:3px;transform:translateX(-50%);
+    pointer-events:none;display:none;color:var(--text);
+  }
+  #crosshair-val{
+    position:absolute;left:0;font-size:10px;
+    font-family:'JetBrains Mono',monospace;
+    background:#1a1a22;border:1px solid var(--border2);
+    padding:2px 6px;border-radius:3px;transform:translateY(-50%);
+    pointer-events:none;display:none;color:var(--text);
+  }
+  #hint{
+    position:absolute;bottom:6px;right:6px;
+    font-size:10px;color:var(--muted);pointer-events:none;
+    font-family:'JetBrains Mono',monospace;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">OHLC<span>28</span></div>
+    <div class="session-badge">Session <b>10:30 – 22:30</b> · Normalized from open</div>
+    <div class="tf-group">
+      <label>Timeframe (sec):</label>
+      <input id="tf-input" class="tf-input" type="number" value="300" min="10"/>
+      <div class="tf-presets">
+        <div class="preset" data-s="60">1m</div>
+        <div class="preset active" data-s="300">5m</div>
+        <div class="preset" data-s="900">15m</div>
+        <div class="preset" data-s="1800">30m</div>
+        <div class="preset" data-s="3600">1h</div>
+      </div>
+      <button class="btn-apply" id="btn-apply">Apply</button>
+    </div>
+  </header>
+
+  <!-- PAIR FILTER BAR -->
+  <div class="pair-bar" id="pair-bar">
+    <button class="filter-btn" id="btn-all">All</button>
+    <button class="filter-btn" id="btn-none">None</button>
+  </div>
+
+  <!-- CHART -->
+  <div id="chart-area">
+    <div id="stats"></div>
+    <div id="canvas-wrap">
+      <canvas id="c"></canvas>
+      <div id="tooltip"></div>
+      <div id="crosshair-time"></div>
+      <div id="crosshair-val"></div>
+      <div id="hint">scroll=zoom · drag=pan · hover pair=highlight</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const PAIRS=[
+  'EUR/USD','GBP/USD','USD/JPY','USD/CHF','AUD/USD','USD/CAD','NZD/USD',
+  'EUR/GBP','EUR/JPY','EUR/CHF','EUR/AUD','EUR/CAD','EUR/NZD',
+  'GBP/JPY','GBP/CHF','GBP/AUD','GBP/CAD','GBP/NZD',
+  'AUD/JPY','AUD/CHF','AUD/CAD','AUD/NZD',
+  'CHF/JPY','CAD/JPY','NZD/JPY','NZD/CHF','CAD/CHF','NZD/CAD'
+];
+
+const COLORS=[
+  '#4f8ef7','#26c97e','#f59e0b','#f04f5a','#a78bfa','#34d399','#fb923c',
+  '#60a5fa','#f472b6','#2dd4bf','#fbbf24','#818cf8','#4ade80','#f87171',
+  '#38bdf8','#c084fc','#a3e635','#fb7185','#67e8f9','#fde68a','#86efac',
+  '#fdba74','#93c5fd','#d946ef','#6ee7b7','#fca5a5','#7dd3fc','#c4b5fd'
+];
+
+const SESSION_START = 10*3600+30*60;
+const SESSION_END   = 22*3600+30*60;
+const SESSION_RANGE = SESSION_END - SESSION_START;
+
+/* LCG RNG */
+function makeRng(seed){
+  let s=seed>>>0;
+  return ()=>{s=(Math.imul(1664525,s)+1013904223)>>>0;return s/4294967296;};
+}
+
+function buildPairData(idx,tfSec){
+  const rng=makeRng(idx*9973+tfSec*7);
+  const vol=0.0006+rng()*0.0018;
+  const nBars=Math.floor(SESSION_RANGE/tfSec);
+  let price=1+rng()*0.3;
+  const bars=[];
+  for(let i=0;i<nBars;i++){
+    const t=SESSION_START+i*tfSec;
+    const o=price;
+    let h=o,l=o;
+    const ticks=Math.max(4,Math.round(tfSec/12));
+    for(let j=0;j<ticks;j++){
+      price=price*(1+(rng()-0.499)*vol);
+      if(price>h)h=price;
+      if(price<l)l=price;
+    }
+    const c=price;
+    bars.push({t,o,h,l,c});
+  }
+  // normalize to % from first open
+  const base=bars[0].o;
+  return bars.map(b=>({
+    t:b.t,
+    o:(b.o/base-1)*100,
+    h:(b.h/base-1)*100,
+    l:(b.l/base-1)*100,
+    c:(b.c/base-1)*100
+  }));
+}
+
+/* STATE */
+let tfSec=300;
+let allData=[];
+let visible=new Set(PAIRS);
+let hoveredPair=null;
+let zoomS=0,zoomE=SESSION_RANGE;
+let dragActive=false,dragX0=0,dragZS=0,dragZE=0;
+let mouseCanvasX=-1,mouseCanvasY=-1;
+
+function rebuild(){
+  allData=PAIRS.map((p,i)=>({pair:p,color:COLORS[i],bars:buildPairData(i,tfSec)}));
+  updateStats();
+  draw();
+}
+
+/* ---- CANVAS ---- */
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const wrap=document.getElementById('canvas-wrap');
+
+function resize(){
+  canvas.width=wrap.clientWidth;
+  canvas.height=wrap.clientHeight;
+  draw();
+}
+
+function secToHHMM(s){
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+
+function draw(){
+  const W=canvas.width,H=canvas.height;
+  if(!W||!H)return;
+  const PAD={l:54,r:16,t:20,b:40};
+  const cw=W-PAD.l-PAD.r;
+  const ch=H-PAD.t-PAD.b;
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#0d0d0f';
+  ctx.fillRect(0,0,W,H);
+
+  if(!allData.length)return;
+  const vis=allData.filter(d=>visible.has(d.pair));
+  if(!vis.length)return;
+
+  const zSecS=SESSION_START+zoomS;
+  const zSecE=SESSION_START+zoomE;
+  const zRange=zoomE-zoomS;
+
+  const inView=d=>d.bars.filter(b=>b.t>=zSecS-tfSec&&b.t<=zSecE+tfSec);
+
+  let minY=Infinity,maxY=-Infinity;
+  vis.forEach(d=>inView(d).forEach(b=>{if(b.l<minY)minY=b.l;if(b.h>maxY)maxY=b.h;}));
+  if(!isFinite(minY)){minY=-1;maxY=1;}
+  if(minY===maxY){minY-=0.1;maxY+=0.1;}
+  const ySafePad=(maxY-minY)*0.08;
+  minY-=ySafePad;maxY+=ySafePad;
+  const yRange=maxY-minY;
+
+  const toX=s=>PAD.l+(s-zSecS)/zRange*cw;
+  const toY=v=>PAD.t+ch-((v-minY)/yRange)*ch;
+
+  const barW=Math.max(1,cw/(zRange/tfSec)*0.72);
+
+  /* grid Y */
+  const nGridY=7;
+  for(let i=0;i<=nGridY;i++){
+    const v=minY+yRange*i/nGridY;
+    const y=toY(v);
+    ctx.strokeStyle='rgba(255,255,255,0.04)';
+    ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();
+    ctx.fillStyle='#4a4a5e';
+    ctx.font='10px JetBrains Mono,monospace';
+    ctx.textAlign='right';
+    ctx.fillText((v>=0?'+':'')+v.toFixed(2)+'%',PAD.l-5,y+3.5);
+  }
+
+  /* grid X */
+  const nGridX=10;
+  for(let i=0;i<=nGridX;i++){
+    const s=zoomS+zRange*i/nGridX;
+    const x=toX(SESSION_START+s);
+    ctx.strokeStyle='rgba(255,255,255,0.04)';
+    ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(x,PAD.t);ctx.lineTo(x,H-PAD.b);ctx.stroke();
+    ctx.fillStyle='#4a4a5e';
+    ctx.font='10px JetBrains Mono,monospace';
+    ctx.textAlign='center';
+    ctx.fillText(secToHHMM(SESSION_START+s),x,H-PAD.b+14);
+  }
+
+  /* zero line */
+  const zy=toY(0);
+  if(zy>=PAD.t&&zy<=H-PAD.b){
+    ctx.strokeStyle='rgba(255,255,255,0.18)';
+    ctx.lineWidth=1;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(PAD.l,zy);ctx.lineTo(W-PAD.r,zy);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#4a4a5e';ctx.textAlign='right';ctx.font='10px JetBrains Mono,monospace';
+    ctx.fillText('0.00%',PAD.l-5,zy+3.5);
+  }
+
+  /* draw non-hovered pairs */
+  vis.forEach(d=>{
+    if(d.pair===hoveredPair)return;
+    const bars=inView(d);
+    ctx.globalAlpha=hoveredPair?0.18:0.55;
+    ctx.strokeStyle=d.color;
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    let first=true;
+    bars.forEach(b=>{
+      const x=toX(b.t+tfSec/2),y=toY(b.c);
+      first?ctx.moveTo(x,y):ctx.lineTo(x,y);first=false;
+    });
+    ctx.stroke();
+    if(barW>=4&&!hoveredPair){
+      ctx.lineWidth=0.8;
+      bars.forEach(b=>{
+        const x=toX(b.t+tfSec/2);
+        ctx.beginPath();ctx.moveTo(x,toY(b.h));ctx.lineTo(x,toY(b.l));ctx.stroke();
+        const yO=toY(b.o),yC=toY(b.c);
+        ctx.globalAlpha=0.45;
+        ctx.fillStyle=b.c>=b.o?d.color:'#f04f5a';
+        ctx.fillRect(x-barW/2,Math.min(yO,yC),barW,Math.max(1,Math.abs(yC-yO)));
+        ctx.globalAlpha=hoveredPair?0.18:0.55;
+      });
+    }
+  });
+  ctx.globalAlpha=1;
+
+  /* draw hovered pair on top */
+  if(hoveredPair){
+    const d=vis.find(x=>x.pair===hoveredPair);
+    if(d){
+      const bars=inView(d);
+      ctx.strokeStyle=d.color;ctx.lineWidth=2;ctx.globalAlpha=1;
+      ctx.beginPath();
+      let first=true;
+      bars.forEach(b=>{
+        const x=toX(b.t+tfSec/2),y=toY(b.c);
+        first?ctx.moveTo(x,y):ctx.lineTo(x,y);first=false;
+      });
+      ctx.stroke();
+      if(barW>=3){
+        bars.forEach(b=>{
+          const x=toX(b.t+tfSec/2);
+          ctx.strokeStyle=d.color;ctx.lineWidth=1.2;
+          ctx.beginPath();ctx.moveTo(x,toY(b.h));ctx.lineTo(x,toY(b.l));ctx.stroke();
+          const yO=toY(b.o),yC=toY(b.c);
+          ctx.fillStyle=b.c>=b.o?d.color:'#f04f5a';
+          ctx.globalAlpha=0.85;
+          ctx.fillRect(x-barW/2,Math.min(yO,yC),barW,Math.max(1,Math.abs(yC-yO)));
+          ctx.globalAlpha=1;
+        });
+      }
+      const last=bars[bars.length-1];
+      if(last){
+        const lx=toX(last.t+tfSec/2),ly=toY(last.c);
+        ctx.beginPath();ctx.arc(lx,ly,4,0,Math.PI*2);
+        ctx.fillStyle=d.color;ctx.fill();
+        ctx.fillStyle='#fff';
+        ctx.font='500 10px JetBrains Mono,monospace';ctx.textAlign='left';
+        const label=(last.c>=0?'+':'')+last.c.toFixed(3)+'%';
+        ctx.fillText(label,lx+8,ly+4);
+      }
+    }
+  }
+
+  /* crosshair */
+  if(mouseCanvasX>=PAD.l&&mouseCanvasX<=W-PAD.r&&mouseCanvasY>=PAD.t&&mouseCanvasY<=H-PAD.b){
+    ctx.strokeStyle='rgba(255,255,255,0.15)';
+    ctx.lineWidth=0.8;
+    ctx.setLineDash([3,4]);
+    ctx.beginPath();ctx.moveTo(mouseCanvasX,PAD.t);ctx.lineTo(mouseCanvasX,H-PAD.b);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(PAD.l,mouseCanvasY);ctx.lineTo(W-PAD.r,mouseCanvasY);ctx.stroke();
+    ctx.setLineDash([]);
+
+    const hovSec=zSecS+(mouseCanvasX-PAD.l)/cw*zRange;
+    const hovVal=minY+((H-PAD.b-mouseCanvasY)/ch)*yRange;
+
+    const ctEl=document.getElementById('crosshair-time');
+    ctEl.style.display='block';
+    ctEl.style.left=mouseCanvasX+'px';
+    ctEl.style.bottom=(H-PAD.b+canvas.getBoundingClientRect().top-wrap.getBoundingClientRect().top+4)+'px';
+    ctEl.textContent=secToHHMM(hovSec);
+
+    const cvEl=document.getElementById('crosshair-val');
+    cvEl.style.display='block';
+    cvEl.style.top=mouseCanvasY+'px';
+    cvEl.style.left='0';
+    cvEl.textContent=(hovVal>=0?'+':'')+hovVal.toFixed(3)+'%';
+
+    /* tooltip for closest pair */
+    const nearestBar=(d)=>{
+      const bars=inView(d);
+      if(!bars.length)return null;
+      return bars.reduce((a,b)=>Math.abs(toX(b.t+tfSec/2)-mouseCanvasX)<Math.abs(toX(a.t+tfSec/2)-mouseCanvasX)?b:a);
+    };
+    const activePairs=hoveredPair?vis.filter(x=>x.pair===hoveredPair):vis;
+    let nearest=null,nearestDist=Infinity;
+    activePairs.forEach(d=>{
+      const b=nearestBar(d);
+      if(!b)return;
+      const bx=toX(b.t+tfSec/2);
+      const dist=Math.hypot(bx-mouseCanvasX,toY(b.c)-mouseCanvasY);
+      if(dist<nearestDist){nearestDist=dist;nearest={d,b};}
+    });
+    const tip=document.getElementById('tooltip');
+    if(nearest&&nearestDist<60){
+      const {d,b}=nearest;
+      const rect=wrap.getBoundingClientRect();
+      const canvRect=canvas.getBoundingClientRect();
+      const bx=toX(b.t+tfSec/2);
+      const by=toY(b.c);
+      const tipX=bx+12+180>cw+PAD.l?bx-195:bx+12;
+      const tipY=Math.max(4,Math.min(H-130,by-40));
+      tip.style.left=tipX+'px';tip.style.top=tipY+'px';tip.style.display='block';
+      const pct=v=>(v>=0?'<span style="color:#26c97e">+'+v.toFixed(4)+'%</span>':'<span style="color:#f04f5a">'+v.toFixed(4)+'%</span>');
+      tip.innerHTML=`<div class="tt-pair" style="color:${d.color}">${d.pair}</div>
+        <div class="tt-row">Time <span>${secToHHMM(b.t)}</span></div>
+        <div class="tt-row">O ${pct(b.o)}</div>
+        <div class="tt-row">H ${pct(b.h)}</div>
+        <div class="tt-row">L ${pct(b.l)}</div>
+        <div class="tt-row">C ${pct(b.c)}</div>`;
+    }else{tip.style.display='none';}
+  }else{
+    document.getElementById('crosshair-time').style.display='none';
+    document.getElementById('crosshair-val').style.display='none';
+    document.getElementById('tooltip').style.display='none';
+  }
+}
+
+/* ---- PAIR BAR ---- */
+function buildPairBar(){
+  const bar=document.getElementById('pair-bar');
+  const btns=bar.querySelectorAll('.filter-btn');
+  PAIRS.forEach((p,i)=>{
+    const el=document.createElement('div');
+    el.className='pair-tag on';
+    el.textContent=p;
+    el.style.color=COLORS[i];
+    el.style.borderColor=COLORS[i];
+    el.dataset.pair=p;
+    el.addEventListener('click',()=>togglePair(p,el));
+    el.addEventListener('mouseenter',()=>{hoveredPair=p;draw();});
+    el.addEventListener('mouseleave',()=>{hoveredPair=null;draw();});
+    bar.appendChild(el);
+  });
+  document.getElementById('btn-all').onclick=()=>{
+    visible=new Set(PAIRS);
+    bar.querySelectorAll('.pair-tag').forEach(el=>{el.className='pair-tag on';});
+    updateStats();draw();
+  };
+  document.getElementById('btn-none').onclick=()=>{
+    visible.clear();
+    bar.querySelectorAll('.pair-tag').forEach(el=>{el.className='pair-tag off';});
+    updateStats();draw();
+  };
+}
+
+function togglePair(p,el){
+  if(visible.has(p)){
+    if(visible.size<=1)return;
+    visible.delete(p);el.className='pair-tag off';
+  }else{
+    visible.add(p);el.className='pair-tag on';
+    el.style.color=COLORS[PAIRS.indexOf(p)];
+    el.style.borderColor=COLORS[PAIRS.indexOf(p)];
+  }
+  updateStats();draw();
+}
+
+function updateStats(){
+  const nBars=Math.floor(SESSION_RANGE/tfSec);
+  document.getElementById('stats').innerHTML=`
+    <div class="stat">TF <b>${tfSec}s</b></div>
+    <div class="stat">Bars <b>${nBars}</b></div>
+    <div class="stat">Pairs visible <b>${visible.size}/28</b></div>
+    <div class="stat">Session range <b>12h</b></div>
+  `;
+}
+
+/* ---- EVENTS ---- */
+canvas.addEventListener('mousemove',e=>{
+  const r=canvas.getBoundingClientRect();
+  const scX=canvas.width/r.width;
+  const scY=canvas.height/r.height;
+  mouseCanvasX=(e.clientX-r.left)*scX;
+  mouseCanvasY=(e.clientY-r.top)*scY;
+  draw();
+});
+canvas.addEventListener('mouseleave',()=>{
+  mouseCanvasX=-1;mouseCanvasY=-1;
+  document.getElementById('tooltip').style.display='none';
+  document.getElementById('crosshair-time').style.display='none';
+  document.getElementById('crosshair-val').style.display='none';
+  draw();
+});
+
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const r=canvas.getBoundingClientRect();
+  const mx=Math.max(0,Math.min(1,(e.clientX-r.left-54)/(r.width-54-16)));
+  const zRange=zoomE-zoomS;
+  const factor=e.deltaY>0?1.22:0.82;
+  const newRange=Math.min(SESSION_RANGE,Math.max(tfSec*3,zRange*factor));
+  const center=zoomS+mx*zRange;
+  let ns=center-mx*newRange;
+  let ne=ns+newRange;
+  if(ns<0){ns=0;ne=Math.min(SESSION_RANGE,newRange);}
+  if(ne>SESSION_RANGE){ne=SESSION_RANGE;ns=Math.max(0,SESSION_RANGE-newRange);}
+  zoomS=ns;zoomE=ne;draw();
+},{passive:false});
+
+canvas.addEventListener('mousedown',e=>{
+  dragActive=true;dragX0=e.clientX;dragZS=zoomS;dragZE=zoomE;
+  canvas.style.cursor='grabbing';
+});
+window.addEventListener('mouseup',()=>{dragActive=false;canvas.style.cursor='crosshair';});
+window.addEventListener('mousemove',e=>{
+  if(!dragActive)return;
+  const r=canvas.getBoundingClientRect();
+  const cw=r.width-54-16;
+  const dx=(e.clientX-dragX0)/cw*(dragZE-dragZS);
+  let ns=dragZS-dx,ne=dragZE-dx;
+  if(ns<0){ne-=ns;ns=0;}
+  if(ne>SESSION_RANGE){ns-=(ne-SESSION_RANGE);ne=SESSION_RANGE;}
+  zoomS=Math.max(0,ns);zoomE=Math.min(SESSION_RANGE,ne);draw();
+});
+
+/* touch support */
+let t0=null;
+canvas.addEventListener('touchstart',e=>{if(e.touches.length===1){t0={x:e.touches[0].clientX,zS:zoomS,zE:zoomE};}},{passive:true});
+canvas.addEventListener('touchmove',e=>{
+  if(e.touches.length===1&&t0){
+    const r=canvas.getBoundingClientRect();
+    const cw=r.width-54-16;
+    const dx=(e.touches[0].clientX-t0.x)/cw*(t0.zE-t0.zS);
+    let ns=t0.zS-dx,ne=t0.zE-dx;
+    if(ns<0){ne-=ns;ns=0;}
+    if(ne>SESSION_RANGE){ns-=(ne-SESSION_RANGE);ne=SESSION_RANGE;}
+    zoomS=Math.max(0,ns);zoomE=Math.min(SESSION_RANGE,ne);draw();
+  }
+},{passive:true});
+
+/* TF controls */
+document.getElementById('btn-apply').addEventListener('click',applyTF);
+document.getElementById('tf-input').addEventListener('keydown',e=>{if(e.key==='Enter')applyTF();});
+document.querySelectorAll('.preset').forEach(el=>{
+  el.addEventListener('click',()=>{
+    document.querySelectorAll('.preset').forEach(p=>p.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('tf-input').value=el.dataset.s;
+    tfSec=parseInt(el.dataset.s);
+    zoomS=0;zoomE=SESSION_RANGE;
+    rebuild();
+  });
+});
+
+function applyTF(){
+  const v=parseInt(document.getElementById('tf-input').value)||300;
+  if(v<10||v>SESSION_RANGE)return;
+  tfSec=v;
+  document.querySelectorAll('.preset').forEach(p=>{
+    p.classList.toggle('active',parseInt(p.dataset.s)===v);
+  });
+  zoomS=0;zoomE=SESSION_RANGE;
+  rebuild();
+}
+
+/* double-click resets zoom */
+canvas.addEventListener('dblclick',()=>{zoomS=0;zoomE=SESSION_RANGE;draw();});
+
+/* resize */
+const ro=new ResizeObserver(()=>resize());
+ro.observe(wrap);
+
+/* INIT */
+buildPairBar();
+resize();
+rebuild();
+</script>
+</body>
+</html>
